@@ -1,6 +1,11 @@
 # -*- coding:utf-8 -*-
 
-# excel格式转换
+"""excel格式转换"""
+
+# 如果在意换行符的问题,可以按以下代码修改
+# f = open(outPath, 'wb') # 以'w'方式写文件,python会自动在换行符结尾按照系统默认换行符替换'\n',使用'b'二进制方式,则不会做任何替换
+# f.write("字符串数据".encode("utf8")) # 将字符串转为二进制字符数组
+# f.close() # 关闭写文件
 
 import sys
 import os
@@ -8,9 +13,6 @@ import xlrd
 import configparser
 
 fileConfig="convert.ini"
-# pathExcel="D:/pan/test_python/xlsx/data/src"
-# pathXML="D:/pan/test_python/xlsx/data/tar"
-# pathFMT="D:/pan/test_python/xlsx/data/tar/fmt.txt"
 
 if __name__ == "__main__":
 	# 配置读取
