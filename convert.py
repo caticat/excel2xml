@@ -105,7 +105,7 @@ if __name__ == "__main__":
 			row = sheet.row(i)
 			isEmptyRow = True
 			for index, cell in enumerate(row):
-				if cell.ctype != xlrd.XL_CELL_EMPTY:
+				if (cell.ctype != xlrd.XL_CELL_EMPTY) and (cell.value != "") and (cell.value != 0):
 					isEmptyRow = False
 					break
 			if isEmptyRow:
