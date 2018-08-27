@@ -2,6 +2,7 @@
 
 """excel格式转换"""
 
+# 配置文件和程序文件(或脚本文件)同名即可,扩展名为`.ini`
 # 如果在意换行符的问题,可以按以下代码修改
 # f = open(outPath, 'wb') # 以'w'方式写文件,python会自动在换行符结尾按照系统默认换行符替换'\n',使用'b'二进制方式,则不会做任何替换
 # f.write("字符串数据".encode("utf8")) # 将字符串转为二进制字符数组
@@ -12,10 +13,9 @@ import os
 import xlrd
 import configparser
 
-fileConfig="convert.ini"
-
 if __name__ == "__main__":
 	# 配置读取
+	fileConfig = os.path.splitext(os.path.basename(sys.argv[0]))[0] + ".ini"
 	pathConfig = os.path.join(os.path.dirname(sys.argv[0]), fileConfig)
 	config = configparser.ConfigParser()
 	config.read(pathConfig)
@@ -85,6 +85,13 @@ if __name__ == "__main__":
 		f.write("<root>\n")
 		for i in range(5, numRow):
 			row = sheet.row(i)
+			isEmptyRow = True
+			for index, cell in enumerate(row):
+				if cell.ctype != xlrd.XL_CELL_EMPTY:
+					isEmptyRow = False
+					break
+			if isEmptyRow:
+				continue
 			f.write("\t<data ")
 			for index, cell in enumerate(row):
 				key = enableColumns.get(index)
