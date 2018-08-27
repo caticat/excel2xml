@@ -10,6 +10,16 @@ convert.py
 分别配置excel目录,xml目录,和导出文件格式目录
 (导出文件格式目录如果为空,则不生成导出文件格式)
 
+### 参数(可选)
+
+可通过参数的方式设置excel,xml和fmt的路径
+
+参数:
+
+- `-e`,`--excel=`:excel的路径配置
+- `-x`,`--xml=`:xml的路径配置
+- `-f`,`--fmt=`:fmt的路径配置
+
 ## 生成exe的方法
 
 `pyinstaller -F -p xlrd convert.py`
@@ -29,7 +39,7 @@ python在使用`w`,`r`方式读写文件时,
 
 ```python
 f = open("/tmp/tmp.txt", 'wb')
-f.write("字符串数据".encode("utf8"))
+f.write("字符串数据\n".encode("utf8"))
 f.close()
 ```
 

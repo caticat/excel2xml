@@ -3,25 +3,43 @@
 """excel格式转换"""
 
 # 配置文件和程序文件(或脚本文件)同名即可,扩展名为`.ini`
+# 支持参数格式`-e excel路径 -x xml路径 -f fmt路径`,`--excel=excel路径 --xml=xml路径 --fmt=fmt路径`
+# 参数会覆盖配置文件的设置
 # 如果在意换行符的问题,可以按以下代码修改
 # f = open(outPath, 'wb') # 以'w'方式写文件,python会自动在换行符结尾按照系统默认换行符替换'\n',使用'b'二进制方式,则不会做任何替换
-# f.write("字符串数据".encode("utf8")) # 将字符串转为二进制字符数组
+# f.write("字符串数据\n".encode("utf8")) # 将字符串转为二进制字符数组
 # f.close() # 关闭写文件
 
 import sys
+import getopt
 import os
 import xlrd
 import configparser
 
 if __name__ == "__main__":
+	# 参数解析
+	try:
+		options, args = getopt.getopt(sys.argv[1:], "e:x:f:", ["excel=", "xml=", "fmt="])
+	except getopt.GetoptError:
+		print("invalid options")
+		exit(1)
+
 	# 配置读取
 	fileConfig = os.path.splitext(os.path.basename(sys.argv[0]))[0] + ".ini"
 	pathConfig = os.path.join(os.path.dirname(sys.argv[0]), fileConfig)
-	config = configparser.ConfigParser()
-	config.read(pathConfig)
-	pathExcel = config.get("path", "excel")
-	pathXML = config.get("path", "XML")
-	pathFMT = config.get("path", "FMT")
+	if os.path.exists(pathConfig):
+		config = configparser.ConfigParser()
+		config.read(pathConfig)
+		pathExcel = config.get("path", "excel")
+		pathXML = config.get("path", "XML")
+		pathFMT = config.get("path", "FMT")
+	for option in options:
+		if (option[0] == "-e") or (option[0] == "--excel"):
+			pathExcel = option[1]
+		elif (option[0] == "-x") or (option[0] == "--xml"):
+			pathXML = option[1]
+		elif (option[0] == "-f") or (option[0] == "--fmt"):
+			pathFMT = option[1]
 
 	# 参数整理
 	enableFMT = len(pathFMT) > 0
