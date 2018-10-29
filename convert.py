@@ -127,6 +127,12 @@ if __name__ == "__main__":
 							value = int(value)
 						elif pt5char == "99999": # "x.99999"的处理
 							value = int(value) + 1
+				elif cell.ctype == xlrd.XL_CELL_TEXT: # 特殊字符转义
+					value = value.replace("&", "&amp;") # 这个转义要放在前面(因为会将后面转义的&替换为该转义)
+					value = value.replace("<", "&lt;")
+					value = value.replace(">", "&gt;")
+					value = value.replace("'", "&apos;")
+					value = value.replace("\"", "&quot;")
 				f.write('%s="%s" ' % (key, value))
 			f.write("/>\n")
 		f.write("</root>\n")
