@@ -15,8 +15,12 @@ import getopt
 import os
 import xlrd
 import configparser
+import datetime
 
 if __name__ == "__main__":
+	# 运行时间统计
+	timeStart = datetime.datetime.now()
+
 	# 参数解析
 	try:
 		options, args = getopt.getopt(sys.argv[1:], "e:x:f:", ["excel=", "xml=", "fmt="])
@@ -61,9 +65,11 @@ if __name__ == "__main__":
 				allExcels.append(os.path.join(maindir, fileName))
 
 	# 解析excel
+	fileCounter = 0
+	fileExportCounter = 0
 	for excelPath in allExcels:
 		# 基本参数
-		print(excelPath)
+		# print(excelPath)
 		excel = xlrd.open_workbook(excelPath)
 		sheet = excel.sheet_by_index(0)
 		numRow = sheet.nrows
@@ -89,14 +95,19 @@ if __name__ == "__main__":
 			os.mkdir(os.path.dirname(outPath))
 
 		# 新旧判断
+		fileCounter += 1
 		needExport = True
 		if os.path.exists(outPath):
 			xlsxMTime = os.stat(excelPath).st_mtime
 			xmlMTime = os.stat(outPath).st_mtime
 			if xlsxMTime < xmlMTime:
 				needExport = False
+		print("%s\t[%s]%s" % (fileCounter, needExport and "+" or "=", excelPath))
 
 		if needExport:
+			# 导出文件记数
+			fileExportCounter += 1
+
 			# 写数据文件
 			f = open(outPath, 'w', encoding='utf8')
 
@@ -172,7 +183,8 @@ if __name__ == "__main__":
 			# 关闭格式文件
 			f.close()
 
-	print("done.")
+	timeEnd = datetime.datetime.now()
+	print("done, use [%s] seconds. [%s/%s] file converted." % ((timeEnd - timeStart).seconds, fileExportCounter, fileCounter))
 
 
 # 测试代码
