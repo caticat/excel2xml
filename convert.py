@@ -62,6 +62,7 @@ if __name__ == "__main__":
 
 	# 解析excel
 	for excelPath in allExcels:
+		# 基本参数
 		print(excelPath)
 		excel = xlrd.open_workbook(excelPath)
 		sheet = excel.sheet_by_index(0)
@@ -80,65 +81,76 @@ if __name__ == "__main__":
 		if len(enableColumns) == 0:
 			continue
 
-		# 写数据文件
+		# 目录整理
 		relPath = os.path.relpath(excelPath, pathExcel)
 		relPathFull = os.path.splitext(relPath)[0]+".xml"
 		outPath = os.path.join(pathXML, relPathFull)
 		if not os.path.exists(os.path.dirname(outPath)):
 			os.mkdir(os.path.dirname(outPath))
-		f = open(outPath, 'w', encoding='utf8')
 
-		# 第一行标头
-		f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+		# 新旧判断
+		needExport = True
+		if os.path.exists(outPath):
+			xlsxMTime = os.stat(excelPath).st_mtime
+			xmlMTime = os.stat(outPath).st_mtime
+			if xlsxMTime < xmlMTime:
+				needExport = False
 
-		# 第二行注释
-		f.write("<!-- ")
-		for index, enableType in enumerate(enableTypeRow):
-			if index not in enableColumns:
-				continue
-			f.write('%s=%s ' % (sheet.row(4)[index].value, sheet.row(2)[index].value))
-		f.write("-->\n")
+		if needExport:
+			# 写数据文件
+			f = open(outPath, 'w', encoding='utf8')
 
-		# 写数据
-		f.write("<root>\n")
-		for i in range(5, numRow):
-			row = sheet.row(i)
-			isEmptyRow = True
-			for index, cell in enumerate(row):
+			# 第一行标头
+			f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+
+			# 第二行注释
+			f.write("<!-- ")
+			for index, enableType in enumerate(enableTypeRow):
 				if index not in enableColumns:
 					continue
-				if (cell.ctype != xlrd.XL_CELL_EMPTY) and (cell.value != "") and (cell.value != 0):
-					isEmptyRow = False
-					break
-			if isEmptyRow:
-				continue
-			f.write("\t<data ")
-			for index, cell in enumerate(row):
-				key = enableColumns.get(index)
-				if not key:
-					continue
-				value = cell.value
-				if cell.ctype == xlrd.XL_CELL_NUMBER: # 数字的特殊处理(excel中没有int,只有float)
-					if value == int(value): # "x.0"的处理
-						value = int(value)
-					else:
-						pt5char = str(value).split(".", 1)[1][:5] # 小数点最近的5个字符如果是0或9,则视为int
-						if pt5char == "00000": # "x.00000"的处理
-							value = int(value)
-						elif pt5char == "99999": # "x.99999"的处理
-							value = int(value) + 1
-				elif cell.ctype == xlrd.XL_CELL_TEXT: # 特殊字符转义
-					value = value.replace("&", "&amp;") # 这个转义要放在前面(因为会将后面转义的&替换为该转义)
-					value = value.replace("<", "&lt;")
-					value = value.replace(">", "&gt;")
-					value = value.replace("'", "&apos;")
-					value = value.replace("\"", "&quot;")
-				f.write('%s="%s" ' % (key, value))
-			f.write("/>\n")
-		f.write("</root>\n")
+				f.write('%s=%s ' % (sheet.row(4)[index].value, sheet.row(2)[index].value))
+			f.write("-->\n")
 
-		# 关闭数据文件
-		f.close()
+			# 写数据
+			f.write("<root>\n")
+			for i in range(5, numRow):
+				row = sheet.row(i)
+				isEmptyRow = True
+				for index, cell in enumerate(row):
+					if index not in enableColumns:
+						continue
+					if (cell.ctype != xlrd.XL_CELL_EMPTY) and (cell.value != "") and (cell.value != 0):
+						isEmptyRow = False
+						break
+				if isEmptyRow:
+					continue
+				f.write("\t<data ")
+				for index, cell in enumerate(row):
+					key = enableColumns.get(index)
+					if not key:
+						continue
+					value = cell.value
+					if cell.ctype == xlrd.XL_CELL_NUMBER: # 数字的特殊处理(excel中没有int,只有float)
+						if value == int(value): # "x.0"的处理
+							value = int(value)
+						else:
+							pt5char = str(value).split(".", 1)[1][:5] # 小数点最近的5个字符如果是0或9,则视为int
+							if pt5char == "00000": # "x.00000"的处理
+								value = int(value)
+							elif pt5char == "99999": # "x.99999"的处理
+								value = int(value) + 1
+					elif cell.ctype == xlrd.XL_CELL_TEXT: # 特殊字符转义
+						value = value.replace("&", "&amp;") # 这个转义要放在前面(因为会将后面转义的&替换为该转义)
+						value = value.replace("<", "&lt;")
+						value = value.replace(">", "&gt;")
+						value = value.replace("'", "&apos;")
+						value = value.replace("\"", "&quot;")
+					f.write('%s="%s" ' % (key, value))
+				f.write("/>\n")
+			f.write("</root>\n")
+
+			# 关闭数据文件
+			f.close()
 
 		# 格式文件
 		if enableFMT:
