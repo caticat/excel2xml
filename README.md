@@ -6,7 +6,7 @@ convert.py
 
 ## 使用方法
 
-修改脚本配置(或打包的exe)同名配置文件(扩展名为`.ini``)(默认为`convert.ini`)文件,
+修改脚本配置(或打包的exe)同名配置文件(扩展名为`.ini`)(默认为`convert.ini`)文件,
 分别配置excel目录,xml目录,和导出文件格式目录
 (导出文件格式目录如果为空,则不生成导出文件格式)
 
@@ -19,6 +19,8 @@ convert.py
 - `-e`,`--excel=`:excel的路径配置
 - `-x`,`--xml=`:xml的路径配置
 - `-f`,`--fmt=`:fmt的路径配置
+- `-s`,`--enableskip`:是否跳过xml创建时间比xlsx创建时间大的文件
+- `-m`,`--multiprocesses`:是否开启多进程导出功能
 
 ## 生成exe的方法
 

@@ -3,7 +3,7 @@
 """excel格式转换"""
 
 # 配置文件和程序文件(或脚本文件)同名即可,扩展名为`.ini`
-# 支持参数格式`-e excel路径 -x xml路径 -f fmt路径 -s`,`--excel=excel路径 --xml=xml路径 --fmt=fmt路径 --enableskip`
+# 支持参数格式`-e excel路径 -x xml路径 -f fmt路径 -s -m`,`--excel=excel路径 --xml=xml路径 --fmt=fmt路径 --enableskip --multiprocesses`
 # 参数会覆盖配置文件的设置
 # 如果在意换行符的问题,可以按以下代码修改
 # f = open(outPath, 'wb') # 以'w'方式写文件,python会自动在换行符结尾按照系统默认换行符替换'\n',使用'b'二进制方式,则不会做任何替换
@@ -21,7 +21,7 @@ import multiprocessing
 
 # 返回:实际导出文件,格式化文件字符串
 def exportXMLProcess(pathExcel, pathXML, enableSkip, enableFMT, arrExcelPath):
-    # print("导出:::", arrExcelPath)
+    #print("导出:::", arrExcelPath)
     counter = 0
     ret = ""
     for excelPath in arrExcelPath:
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
     # 参数解析
     try:
-        options, args = getopt.getopt(sys.argv[1:], "e:x:f:s", ["excel=", "xml=", "fmt=", "enableskip"])
+        options, args = getopt.getopt(sys.argv[1:], "e:x:f:s:m", ["excel=", "xml=", "fmt=", "enableskip", "multiprocesses"])
     except getopt.GetoptError:
         print("invalid options")
         exit(1)
@@ -167,6 +167,7 @@ if __name__ == "__main__":
     fileConfig = os.path.splitext(os.path.basename(sys.argv[0]))[0] + ".ini"
     pathConfig = os.path.join(os.path.dirname(sys.argv[0]), fileConfig)
     enableSkip = False
+    enableMultiProcesses = False
     if os.path.exists(pathConfig):
         config = configparser.ConfigParser()
         config.read(pathConfig)
@@ -174,6 +175,7 @@ if __name__ == "__main__":
         pathXML = config.get("path", "XML")
         pathFMT = config.get("path", "FMT")
         enableSkip = config.get("option", "enableSkip") == "1"
+        enableMultiProcesses = config.get("option", "enableMultiProcesses") == "1"
     for option in options:
         if (option[0] == "-e") or (option[0] == "--excel"):
             pathExcel = option[1]
@@ -183,6 +185,8 @@ if __name__ == "__main__":
             pathFMT = option[1]
         elif (option[0] == "-s") or (option[0] == "--enableskip"):
             enableSkip = True
+        elif (option[0] == "-m") or (option[0] == "--multiprocesses"):
+            enableMultiProcesses = True
 
     # 参数整理
     enableFMT = len(pathFMT) > 0
@@ -206,6 +210,10 @@ if __name__ == "__main__":
         print("开启根据日期跳过文件功能")
     else:
         print("禁用根据日期跳过文件功能")
+    if enableMultiProcesses:
+        print("开启多进程导出")
+    else:
+        print("禁用多进程导出")
 
     # 获取到全部的excel文件
     allExcels=[]
@@ -216,24 +224,30 @@ if __name__ == "__main__":
                 continue
             allExcels.append(os.path.join(maindir, fileName))
 
-    # 多进程参数整理
+    # 解析excel
     fileCounter = len(allExcels) # 总文件数量
     fileExportCounter = 0 # 实际导出的文件数量
-    processes = multiprocessing.cpu_count() # 进程数量
-    processeFileNum = int((fileCounter + processes - 1) / processes) # 每个进程解析的文件的数量
-    processesPool = multiprocessing.Pool(processes=processes) # 进程池初始化
-
-    # 解析excel
-    arrProcessRet = []
-    for i in range(0, fileCounter, processeFileNum):
-        arrProcessRet.append(processesPool.apply_async(exportXMLProcess, (pathExcel, pathXML, enableSkip, enableFMT, allExcels[i:i + processeFileNum],)))
-    processesPool.close()
-    processesPool.join()
+    arrProcessRet = [] # 返回结果
+    if enableMultiProcesses:
+        # print("多进程")
+        processes = multiprocessing.cpu_count() # 进程数量
+        processeFileNum = int((fileCounter + processes - 1) / processes) # 每个进程解析的文件的数量
+        processesPool = multiprocessing.Pool(processes=processes) # 进程池初始化
+        for i in range(0, fileCounter, processeFileNum):
+            arrProcessRet.append(processesPool.apply_async(exportXMLProcess, (pathExcel, pathXML, enableSkip, enableFMT, allExcels[i:i + processeFileNum],)))
+        processesPool.close()
+        processesPool.join()
+    else:
+        # print("单进程")
+        arrProcessRet.append(exportXMLProcess(pathExcel, pathXML, enableSkip, enableFMT, allExcels))
 
     # 多进程返回结果整理
     fmtAll = ""
     for processRet in arrProcessRet:
-        arrRet = processRet.get()
+        if enableMultiProcesses:
+            arrRet = processRet.get()
+        else:
+            arrRet = processRet
         fileExportCounter += arrRet[0]
         fmtAll += arrRet[1]
 
