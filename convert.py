@@ -153,6 +153,9 @@ def exportXML(pathExcel, pathXML, enableSkip, enableFMT, excelPath):
     return True, needExport, ret
 
 if __name__ == "__main__":
+    # pyInstaller打包问题处理(pyInstaller打包多进程时会出现运行报错问题)
+    multiprocessing.freeze_support()
+
     # 运行时间统计
     timeStart = datetime.datetime.now()
 
