@@ -17,6 +17,140 @@ import os
 import xlrd
 import configparser
 import datetime
+import multiprocessing
+
+# 返回:实际导出文件,格式化文件字符串
+def exportXMLProcess(pathExcel, pathXML, enableSkip, enableFMT, arrExcelPath):
+    # print("导出:::", arrExcelPath)
+    counter = 0
+    ret = ""
+    for excelPath in arrExcelPath:
+        success, needExport, retfmt = exportXML(pathExcel, pathXML, enableSkip, enableFMT, excelPath)
+        if success:
+            if needExport:
+                counter += 1
+            ret += retfmt
+    return counter, ret
+
+# 返回:文件是否可以导出,文件是否真正导出,格式化文件字符串
+def exportXML(pathExcel, pathXML, enableSkip, enableFMT, excelPath):
+    # 基本参数
+    # print(excelPath)
+    excel = xlrd.open_workbook(excelPath)
+    sheet = excel.sheet_by_index(0)
+    numRow = sheet.nrows
+    if numRow < 5:
+        return False, False, ""
+
+    # 数据头处理
+    # 服务器有用数据整理
+    enableColumns = {}
+    enableTypeRow = sheet.row(3)
+    for index, enableType in enumerate(enableTypeRow):
+        if (enableType.value != "Server") and (enableType.value != "Both"):
+            continue
+        enableColumns[index] = sheet.row(4)[index].value
+    if len(enableColumns) == 0:
+        return False, False, ""
+
+    # 目录整理
+    relPath = os.path.relpath(excelPath, pathExcel)
+    relPathFull = os.path.splitext(relPath)[0] + ".xml"
+    outPath = os.path.join(pathXML, relPathFull)
+    if not os.path.exists(os.path.dirname(outPath)):
+        os.makedirs(os.path.dirname(outPath))
+
+    # 新旧判断
+    # fileCounter += 1
+    needExport = True
+    if enableSkip:
+        if os.path.exists(outPath):
+            xlsxMTime = os.stat(excelPath).st_mtime
+            xmlMTime = os.stat(outPath).st_mtime
+            if xlsxMTime < xmlMTime:
+                needExport = False
+    # print("%s\t[%s](%s)" % (fileCounter, needExport and "+" or "=", excelPath))
+
+    if needExport:
+        # 日志
+        print("%s" % (excelPath))
+        # print("%s\t%s" % (fileCounter, excelPath))
+
+        # 导出文件计数
+        # fileExportCounter += 1
+
+        # 写数据文件
+        # f = open(outPath, 'w', encoding='utf8')
+        f = open(outPath, 'wb')
+
+        # 第一行标头
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode("utf8"))
+
+        # 第二行注释
+        f.write("<!-- ".encode("utf8"))
+        for index, enableType in enumerate(enableTypeRow):
+            if index not in enableColumns:
+                continue
+            f.write(('%s=%s ' % (sheet.row(4)[index].value, sheet.row(2)[index].value)).encode("utf8"))
+        f.write("-->\n".encode("utf8"))
+
+        # 写数据
+        f.write("<root>\n".encode("utf8"))
+        for i in range(5, numRow):
+            row = sheet.row(i)
+            isEmptyRow = True
+            for index, cell in enumerate(row):
+                if index not in enableColumns:
+                    continue
+                if (cell.ctype != xlrd.XL_CELL_EMPTY) and (cell.value != "") and (cell.value != 0):
+                    isEmptyRow = False
+                    break
+            if isEmptyRow:
+                continue
+            f.write("\t<data ".encode("utf8"))
+            for index, cell in enumerate(row):
+                key = enableColumns.get(index)
+                if not key:
+                    continue
+                value = cell.value
+                if cell.ctype == xlrd.XL_CELL_NUMBER:  # 数字的特殊处理(excel中没有int,只有float)
+                    if value == int(value):  # "x.0"的处理
+                        value = int(value)
+                    else:
+                        pt5char = str(value).split(".", 1)[1][:5]  # 小数点最近的5个字符如果是0或9,则视为int
+                        if pt5char == "00000":  # "x.00000"的处理
+                            value = int(value)
+                        elif pt5char == "99999":  # "x.99999"的处理
+                            value = int(value) + 1
+                elif cell.ctype == xlrd.XL_CELL_TEXT:  # 特殊字符转义
+                    value = value.replace("&", "&amp;")  # 这个转义要放在前面(因为会将后面转义的&替换为该转义)
+                    value = value.replace("<", "&lt;")
+                    value = value.replace(">", "&gt;")
+                    value = value.replace("'", "&apos;")
+                    value = value.replace("\"", "&quot;")
+                f.write(('%s="%s" ' % (key, value)).encode("utf8"))
+            f.write("/>\n".encode("utf8"))
+        f.write("</root>\n".encode("utf8"))
+
+        # 关闭数据文件
+        f.close()
+
+    # 格式文件
+    ret = ""
+    if enableFMT:
+        # 写格式文件
+        ret += (("%s\n" % relPathFull))
+        for index, enableType in enumerate(enableTypeRow):
+            if index not in enableColumns:
+                continue
+            name = sheet.row(4)[index].value
+            comment = sheet.row(2)[index].value
+            ctype = sheet.row(1)[index].value
+            if sheet.row(1)[index].value == "int":
+                ctype = "int64"
+            ret += (("\t%s\t%s\t`xml:\"%s,attr\"`\t// %s\n" % (name, ctype, name, comment)))
+        ret +=("\n")
+    return True, needExport, ret
 
 if __name__ == "__main__":
     # 运行时间统计
@@ -82,130 +216,32 @@ if __name__ == "__main__":
                 continue
             allExcels.append(os.path.join(maindir, fileName))
 
+    # 多进程参数整理
+    fileCounter = len(allExcels) # 总文件数量
+    fileExportCounter = 0 # 实际导出的文件数量
+    processes = multiprocessing.cpu_count() # 进程数量
+    processeFileNum = int((fileCounter + processes - 1) / processes) # 每个进程解析的文件的数量
+    processesPool = multiprocessing.Pool(processes=processes) # 进程池初始化
+
     # 解析excel
-    fileCounter = 0
-    fileExportCounter = 0
-    for excelPath in allExcels:
-        # 基本参数
-        # print(excelPath)
-        excel = xlrd.open_workbook(excelPath)
-        sheet = excel.sheet_by_index(0)
-        numRow = sheet.nrows
-        if numRow < 5:
-            continue
+    arrProcessRet = []
+    for i in range(0, fileCounter, processeFileNum):
+        arrProcessRet.append(processesPool.apply_async(exportXMLProcess, (pathExcel, pathXML, enableSkip, enableFMT, allExcels[i:i + processeFileNum],)))
+    processesPool.close()
+    processesPool.join()
 
-        # 数据头处理
-        # 服务器有用数据整理
-        enableColumns = {}
-        enableTypeRow = sheet.row(3)
-        for index, enableType in enumerate(enableTypeRow):
-            if (enableType.value != "Server") and (enableType.value != "Both"):
-                continue
-            enableColumns[index] = sheet.row(4)[index].value
-        if len(enableColumns) == 0:
-            continue
+    # 多进程返回结果整理
+    fmtAll = ""
+    for processRet in arrProcessRet:
+        arrRet = processRet.get()
+        fileExportCounter += arrRet[0]
+        fmtAll += arrRet[1]
 
-        # 目录整理
-        relPath = os.path.relpath(excelPath, pathExcel)
-        relPathFull = os.path.splitext(relPath)[0]+".xml"
-        outPath = os.path.join(pathXML, relPathFull)
-        if not os.path.exists(os.path.dirname(outPath)):
-            os.mkdir(os.path.dirname(outPath))
-
-        # 新旧判断
-        fileCounter += 1
-        needExport = True
-        if enableSkip:
-            if os.path.exists(outPath):
-                xlsxMTime = os.stat(excelPath).st_mtime
-                xmlMTime = os.stat(outPath).st_mtime
-                if xlsxMTime < xmlMTime:
-                    needExport = False
-        # print("%s\t[%s](%s)" % (fileCounter, needExport and "+" or "=", excelPath))
-
-        if needExport:
-            # 日志
-            print("%s\t%s" % (fileCounter, excelPath))
-
-            # 导出文件计数
-            fileExportCounter += 1
-
-            # 写数据文件
-            # f = open(outPath, 'w', encoding='utf8')
-            f = open(outPath, 'wb')
-
-            # 第一行标头
-            f.write('<?xml version="1.0" encoding="UTF-8"?>\n'.encode("utf8"))
-
-            # 第二行注释
-            f.write("<!-- ".encode("utf8"))
-            for index, enableType in enumerate(enableTypeRow):
-                if index not in enableColumns:
-                    continue
-                f.write(('%s=%s ' % (sheet.row(4)[index].value, sheet.row(2)[index].value)).encode("utf8"))
-            f.write("-->\n".encode("utf8"))
-
-            # 写数据
-            f.write("<root>\n".encode("utf8"))
-            for i in range(5, numRow):
-                row = sheet.row(i)
-                isEmptyRow = True
-                for index, cell in enumerate(row):
-                    if index not in enableColumns:
-                        continue
-                    if (cell.ctype != xlrd.XL_CELL_EMPTY) and (cell.value != "") and (cell.value != 0):
-                        isEmptyRow = False
-                        break
-                if isEmptyRow:
-                    continue
-                f.write("\t<data ".encode("utf8"))
-                for index, cell in enumerate(row):
-                    key = enableColumns.get(index)
-                    if not key:
-                        continue
-                    value = cell.value
-                    if cell.ctype == xlrd.XL_CELL_NUMBER: # 数字的特殊处理(excel中没有int,只有float)
-                        if value == int(value): # "x.0"的处理
-                            value = int(value)
-                        else:
-                            pt5char = str(value).split(".", 1)[1][:5] # 小数点最近的5个字符如果是0或9,则视为int
-                            if pt5char == "00000": # "x.00000"的处理
-                                value = int(value)
-                            elif pt5char == "99999": # "x.99999"的处理
-                                value = int(value) + 1
-                    elif cell.ctype == xlrd.XL_CELL_TEXT: # 特殊字符转义
-                        value = value.replace("&", "&amp;") # 这个转义要放在前面(因为会将后面转义的&替换为该转义)
-                        value = value.replace("<", "&lt;")
-                        value = value.replace(">", "&gt;")
-                        value = value.replace("'", "&apos;")
-                        value = value.replace("\"", "&quot;")
-                    f.write(('%s="%s" ' % (key, value)).encode("utf8"))
-                f.write("/>\n".encode("utf8"))
-            f.write("</root>\n".encode("utf8"))
-
-            # 关闭数据文件
-            f.close()
-
-        # 格式文件
-        if enableFMT:
-            # 写格式文件
-            # f = open(pathFMT, 'a', encoding='utf8')
-            f = open(pathFMT, 'ab')
-
-            f.write(("%s\n" % relPathFull).encode("utf8"))
-            for index, enableType in enumerate(enableTypeRow):
-                if index not in enableColumns:
-                    continue
-                name = sheet.row(4)[index].value
-                comment = sheet.row(2)[index].value
-                ctype = sheet.row(1)[index].value
-                if sheet.row(1)[index].value == "int":
-                    ctype = "int64"
-                f.write(("\t%s\t%s\t`xml:\"%s,attr\"`\t// %s\n" % (name, ctype, name, comment)).encode("utf8"))
-            f.write("\n".encode("utf8"))
-
-            # 关闭格式文件
-            f.close()
+    # 格式化文件整理
+    if enableFMT:
+        f = open(pathFMT, 'ab')
+        f.write(fmtAll.encode("utf8"))
+        f.close()
 
     timeEnd = datetime.datetime.now()
     print("done, use [%s] seconds. [%s/%s] file converted." % ((timeEnd - timeStart).seconds, fileExportCounter, fileCounter))
